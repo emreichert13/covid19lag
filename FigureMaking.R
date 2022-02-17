@@ -11,7 +11,7 @@ library(ggridges)
 
 # Here, we first run a script that reads in and cleans surveillance data (CaseAdmitAvg) 
 # containing daily COVID-19 case counts, hospital admissions with COVID-19, and within-hospital
-# COVID-19 attributable deaths (3 separate files), disaggregated by age category. 
+# COVID-19 attributable deaths, disaggregated by age category. 
 source("Documents/2021 CCDD research/NICDdatacleaning.R")
 
 # Now run case to hospitalization lag analysis file
