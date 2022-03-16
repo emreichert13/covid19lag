@@ -242,22 +242,53 @@ VOC_rates <- rbind(WT_rates, Beta_rates, Delta_rates, Omi_rates) %>%
 VOC_rates$HospRate[VOC_rates$HospRate < 0.01] <- 0.01
 
 #for each lag time, age cat, and VOC, calculate Mean of Log10-transformed CHR
+library(psych)
 VOC_rates <- VOC_rates %>%
   group_by(VOC, agecat, LagTime) %>%
-  summarise(AvgHospRate = mean(log10(HospRate), na.rm = T))
+  summarise(AvgHospRate = geoMean(HospRate, na.rm = T))
 
 VOC_corr_max_CasetoHosp <- left_join(VOC_corr_max_CasetoHosp, VOC_rates, by = c("VOC", "agecat", "LagTime"))
 
 #plot CHR by lag time, for each age strata and VOC
 P4 <- ggplot(VOC_rates) +
   facet_wrap(~agecat) + theme_light() +
-  geom_line(aes(x = LagTime, y = AvgHospRate, color = VOC, fill = VOC), size = 0.8) + 
+  geom_line(aes(x = LagTime, y = (AvgHospRate), color = VOC, fill = VOC), size = 0.8) + 
   geom_point(data=VOC_corr_max_CasetoHosp, size=2.5,
-             aes(x= LagTime, y = AvgHospRate, color = VOC)) + 
+             aes(x= LagTime, y = (AvgHospRate), color = VOC)) + 
   scale_color_manual(values = c("turquoise3", "royalblue4", "darkorange2", "red4"))+ 
   xlab("Lag Interval (days)") +
-  ylab("Mean of Log10 CHR") + scale_y_continuous(breaks = c(-1.30103, -1, -0.69897, -0.39794,-0.09691001), labels = c("5%", "10%", "20%", "40%", "80%")) +
+  ylab("Geometric Mean CHR (log10 scale)") + 
+  #scale_y_continuous(breaks = c(-1.30103, -1, -0.69897, -0.39794,-0.09691001), labels = c("5%", "10%", "20%", "40%", "80%")) +
   ggtitle("A. Case Hospitalization Ratio by Lag Interval")
 P4 <- P4 + theme(legend.position = 'none', plot.title = element_text(size = 12))
 P4
+
+WT_byage <- WT %>%
+  group_by(agecat) %>%
+  summarise(N = sum(CaseCount), Prop = N/699369) %>%
+  mutate(VOC = rep("D614G"))
+
+Beta_byage <- BETA %>%
+  group_by(agecat) %>%
+  summarise(N = sum(CaseCount), Prop = N/801785) %>%
+  mutate(VOC = rep("Beta"))
+
+Delta_byage <- DELTA %>%
+  group_by(agecat) %>%
+  summarise(N = sum(CaseCount), Prop = N/1341271) %>%
+  mutate(VOC = rep("Delta"))
+
+Omi_byage <- OMI %>%
+  group_by(agecat) %>%
+  summarise(N = sum(CaseCount), Prop = N/654217) %>%
+  mutate(VOC = rep("Omicron"))
+
+VOCcases_age <- rbind(WT_byage, Beta_byage, Delta_byage, Omi_byage)
+VOC_CHR_summary <- VOCcases_age %>%
+  left_join(., VOC_corr_max_CasetoHosp, by = c("VOC", "agecat")) %>%
+  mutate(Weighted_CHR = Prop * AvgHospRate)
+
+VOC_CHR_summary %>%
+  group_by(VOC) %>%
+  summarise(CHR = sum(Weighted_CHR)*100)
 

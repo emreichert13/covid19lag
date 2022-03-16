@@ -160,7 +160,18 @@ Omi_ridge <- Omi_ridge + theme(legend.position  = "none")
 #omicron - peak case # on 2021-12-13, added vertical line indicator
 
 #create aggregate plot
-grid.arrange(WT_ridge, Beta_ridge, Delta_ridge, Omi_ridge, nrow = 1)
+grid.arrange(WT_ridge, Beta_ridge, Delta_ridge, Omi_ridge, nrow = 1, widths = c(1,1,1,.5))
+
+LONG <- rbind(WT_long, Beta_long, Delta_long, Omi_long)
+Ridge <- ggplot(LONG, aes(x = Date, y = agecat)) +
+  geom_density_ridges(aes(fill = agecat), bandwidth = 230000, color = "white")+ theme_classic() +
+  geom_vline(xintercept = Omi_deaths$Date[197], color = "black", linetype = "dashed") +
+  geom_vline(xintercept = Delta_deaths$Date[590], color = "black", linetype = "dashed") +
+  geom_vline(xintercept = Beta_deaths$Date[65], color = "black", linetype = "dashed") +
+  geom_vline(xintercept = WT_deaths$Date[107], color = "black", linetype = "dashed") +
+  scale_fill_brewer(palette = "Paired") + ylab("Age Category")
+Ridge <- Ridge + theme(legend.position = "none")
+Ridge
 
 ############################
 #Fig. 3 Heatmap of Distance Correlations for all associations

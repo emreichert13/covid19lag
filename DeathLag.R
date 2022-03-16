@@ -227,22 +227,32 @@ VOC_rates$DeathRate[VOC_rates$DeathRate < 0.0001] <- 0.0001
 #for each lag time, age cat, and VOC, calculate Mean of Log10-transformed CFR
 VOC_rates <- VOC_rates %>%
   group_by(VOC, agecat, LagTime) %>%
-  summarise(AvgDeathRate = mean(log10(DeathRate), na.rm = T))
+  filter(!is.na(DeathRate)) %>%
+  summarise(AvgDeathRate = geoMean(DeathRate, na.rm = T))
 
 VOC_corr_max_CasetoDeath <- left_join(VOC_corr_max_CasetoDeath, VOC_rates, by = c("VOC", "agecat", "LagTime"))
 
 #plot CFR by lag time, for each age strata and VOC
 P5 <- ggplot(VOC_rates) +
   facet_wrap(~agecat) + theme_light() +
-  geom_line(aes(x = LagTime, y = AvgDeathRate, color = VOC), size = 0.8) + 
+  geom_line(aes(x = LagTime, y = log10(AvgDeathRate), color = VOC), size = 0.8) + 
   geom_point(data=VOC_corr_max_CasetoDeath, size=2.5,
-             aes(x = LagTime, y = AvgDeathRate, color = VOC)) + 
+             aes(x = LagTime, y = log10(AvgDeathRate), color = VOC)) + 
   scale_color_manual(values = c("turquoise3", "royalblue4", "darkorange2", "red4"))+ 
   xlab("Lag Interval (days)") +
-  ylab("Mean of Log10 CFR") + scale_y_continuous(breaks = c(-3, -2,-1), labels = c("0.1%", "1%", "10%")) +
+  ylab("Geomtric Mean CFR (log10 scale)") + 
+  scale_y_continuous(breaks = c(-3, -2,-1), labels = c("0.1%", "1%", "10%")) +
   ggtitle("B. Case Fatality Ratio by Lag Interval")
 P5 <- P5 + theme(plot.title = element_text(size = 12))
 P5
+
+VOC_CFR_summary <- VOCcases_age %>%
+  left_join(., VOC_corr_max_CasetoDeath, by = c("VOC", "agecat")) %>%
+  mutate(Weighted_CFR = Prop * AvgDeathRate)
+
+VOC_CFR_summary %>%
+  group_by(VOC) %>%
+  summarise(CFR = sum(Weighted_CFR))
 
 #CHR and CFR aggregate plot
 grid.arrange(P4, P5, nrow = 1, widths = c(1, 1.3))
@@ -333,3 +343,108 @@ P2 <- ggplot(VOC_corr_HosptoDeath, aes(x = LagTime, y = agecat)) +
   ylab("Age Category") + 
   facet_grid(VOC ~ .)  + theme_classic() + labs(title = "B. Hospitalizations to Deaths", fill = expression(paste("Distance \nCorrelation")))
 P2 <- P2 + theme(plot.title = element_text(size = 12), legend.position = 'bottom')
+
+#create in-hospital CFR as function of lag time
+CalcDeathRate2 <- function(x) {
+  x %>%
+    dplyr::group_by(agecat, Date) %>%
+    summarise(rate_deathlead1 = Death_lead1/HospCount,
+              rate_deathlead2 = Death_lead2/HospCount,
+              rate_deathlead3 = Death_lead3/HospCount,
+              rate_deathlead4 = Death_lead4/HospCount,
+              rate_deathlead5 = Death_lead5/HospCount,
+              rate_deathlead6 = Death_lead6/HospCount,
+              rate_deathlead7 = Death_lead7/HospCount,
+              rate_deathlead8 = Death_lead8/HospCount,
+              rate_deathlead9 = Death_lead9/HospCount,
+              rate_deathlead10 = Death_lead10/HospCount,
+              rate_deathlead11 = Death_lead11/HospCount,
+              rate_deathlead12 = Death_lead12/HospCount,
+              rate_deathlead13 = Death_lead13/HospCount,
+              rate_deathlead14 = Death_lead14/HospCount,
+              rate_deathlead15 = Death_lead15/HospCount,
+              rate_deathlead16 = Death_lead16/HospCount,
+              rate_deathlead17 = Death_lead17/HospCount,
+              rate_deathlead18 = Death_lead18/HospCount,
+              rate_deathlead19 = Death_lead19/HospCount,
+              rate_deathlead20 = Death_lead20/HospCount,
+              rate_deathlead21 = Death_lead21/HospCount,
+              rate_deathlead22 = Death_lead22/HospCount,
+              rate_deathlead23 = Death_lead23/HospCount,
+              rate_deathlead24 = Death_lead24/HospCount,
+              rate_deathlead25 = Death_lead25/HospCount)
+}
+
+#apply within-hosp CFR function to each VOC dataset
+WT_rates <- CalcDeathRate2(WT_deaths) %>%
+  mutate(VOC = rep("D614G"))
+
+Beta_rates <- CalcDeathRate2(Beta_deaths) %>%
+  mutate(VOC = rep("Beta"))
+
+Delta_rates <- CalcDeathRate2(Delta_deaths) %>%
+  mutate(VOC = rep("Delta"))
+
+Omi_rates <- CalcDeathRate2(Omi_deaths) %>%
+  mutate(VOC = rep("Omicron"))
+
+#aggregate results for each VOC-dominated wave
+VOC_rates <- rbind(WT_rates, Beta_rates, Delta_rates, Omi_rates) %>%
+  gather(., key = LagTime, value = HospDeathRate, -agecat, -Date, -VOC) %>%
+  mutate(LagTime = parse_number(LagTime),
+         VOC = factor(VOC, levels=c('D614G','Beta','Delta','Omicron')))
+
+#correct -Inf values
+VOC_rates$HospDeathRate[VOC_rates$HospDeathRate < 0.001] <- 0.001
+
+#for each lag time, age cat, and VOC, calculate Mean of Log10-transformed CFR
+VOC_rates <- VOC_rates %>%
+  group_by(VOC, agecat, LagTime) %>%
+  summarise(AvgHospDeathRate = geoMean(HospDeathRate, na.rm = T))
+
+VOC_corr_max_HosptoDeath <- left_join(VOC_corr_max_HosptoDeath, VOC_rates, by = c("VOC", "agecat", "LagTime"))
+
+#plot within-hosp CFR by lag time, for each age strata and VOC
+P6 <- ggplot(VOC_rates) +
+  facet_wrap(~agecat) + theme_light() +
+  geom_line(aes(x = LagTime, y = AvgHospDeathRate, color = VOC), size = 0.8) + 
+  geom_point(data=VOC_corr_max_HosptoDeath, size=2.5,
+             aes(x = LagTime, y = AvgHospDeathRate, color = VOC)) + 
+  scale_color_manual(values = c("turquoise3", "royalblue4", "darkorange2", "red4"))+ 
+  xlab("Lag Interval (days)") +
+  ylab("Mean of Log10 CFR") + 
+  #scale_y_continuous(breaks = c(-3, -2,-1), labels = c("0.1%", "1%", "10%")) +
+  ggtitle("B. Case Fatality Ratio by Lag Interval")
+P6 <- P6 + theme(plot.title = element_text(size = 12))
+P6
+
+#calculate age group composition of hospitalizations for each VOC
+WT_byage2 <- WT %>%
+  group_by(agecat) %>%
+  summarise(N = sum(HospCount), Prop = N/106568) %>%
+  mutate(VOC = rep("D614G"))
+
+Beta_byage2 <- BETA %>%
+  group_by(agecat) %>%
+  summarise(N = sum(HospCount), Prop = N/137397) %>%
+  mutate(VOC = rep("Beta"))
+
+Delta_byage2 <- DELTA %>%
+  group_by(agecat) %>%
+  summarise(N = sum(HospCount), Prop = N/172446) %>%
+  mutate(VOC = rep("Delta"))
+
+Omi_byage2 <- OMI %>%
+  group_by(agecat) %>%
+  summarise(N = sum(HospCount), Prop = N/60250) %>%
+  mutate(VOC = rep("Omicron"))
+
+VOChosp_age <- rbind(WT_byage2, Beta_byage2, Delta_byage2, Omi_byage2)
+
+VOC_CFRHosp_summary <- VOChosp_age %>%
+  left_join(., VOC_corr_max_HosptoDeath, by = c("VOC", "agecat")) %>%
+  mutate(Weighted_CFR_Hosp = Prop * AvgHospDeathRate)
+
+VOC_CFRHosp_summary %>%
+  group_by(VOC) %>%
+  summarise(CFRHosp = sum(Weighted_CFR_Hosp))
